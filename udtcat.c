@@ -580,7 +580,7 @@ int main(int argc, char **argv)
   	/* prevent getopt() from printing error messages to stderr */
 	opterr = 0; 
 	/* parse arguments */
-	while((option = getopt(argc, argv, "lvshp:")) != -1)
+	while((option = getopt(argc, argv, "lvshp:b:")) != -1)
 	{
 		switch(option)
 		{
