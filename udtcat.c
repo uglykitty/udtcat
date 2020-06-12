@@ -65,7 +65,7 @@
 int send_msg(int socket, const char *msg, int msg_len);
 int recv_msg(int socket, char *buffer, int buffer_size);
 int server_mode(const char* const listen_port_string);
-int client_mode(const char* const server_name, const char* const port_string);
+int client_mode(const char* const server_name, const char* const port_string, const char* const local_port_string);
 void *recv_handler(void *recv_info_param);
 void signal_handler(int signum);
 void siguser1_handler(int signum);
@@ -395,13 +395,13 @@ int server_mode(const char* const listen_port_string)
 /* brief : run the program in client mode.
    return: 0 on success, -1 otherwise.
  */
-int client_mode(const char* const server_name, const char* const port_string)
+int client_mode(const char* const server_name, const char* const port_string, const char* const local_port_string)
 {
 	char send_buffer[SEND_BUFFER_SIZE],
 	     recv_buffer[RECV_BUFFER_SIZE];
 
-	struct addrinfo host_addr_hints, 
-	                *host_addr_res;
+	struct addrinfo host_addr_hints, local_addr_hints,
+	                *host_addr_res, *local_addr_res;
 
 	int buffer_len  = 0,
 	 	sent_bytes;   
@@ -417,6 +417,34 @@ int client_mode(const char* const server_name, const char* const port_string)
 			                   udt_getlasterror_message());
 		return ERR_INVALID_SO_CREATED;
 	}
+
+	if (local_port_string)
+	{
+		(void)memset(&local_addr_hints, 0, sizeof(struct addrinfo));
+		local_addr_hints.ai_flags    = AI_PASSIVE;
+		local_addr_hints.ai_family   = AF_INET;
+		local_addr_hints.ai_socktype = SOCK_STREAM;
+		/* find host information */
+		if(getaddrinfo(NULL, local_port_string, 
+							 &local_addr_hints, 
+							 &local_addr_res) < 0)
+		{
+			perror("udtcat: could not get the address information");
+			return ERR_GETADDRINFO_FAILED;
+		}
+		/* bind the address to the socket */
+		if (udt_bind(server_fd, 
+					local_addr_res->ai_addr, 
+					local_addr_res->ai_addrlen))
+		{
+			(void)fprintf(stderr, "udtcat: could not bind address to socket: %s\n", 
+								   udt_getlasterror_message());
+			return ERR_BIND_FAILED;
+		}
+		/* free address info; unnecessary after this point */
+		freeaddrinfo(local_addr_res);
+	}
+	
     /* initialize host_addr_hints */
     (void)memset(&host_addr_hints, 0, sizeof(struct addrinfo));
     /* find host information */
@@ -486,7 +514,7 @@ int main(int argc, char **argv)
 		option 		=  0,
 		retval 		=  0;
 
-	char port_string [PORT_STRING_LEN],
+	char port_string [PORT_STRING_LEN], local_port_string [PORT_STRING_LEN],
 		 hostname [MAX_HOSTNAME_LEN];
 
 	struct sigaction sa_sigset;
@@ -501,6 +529,7 @@ int main(int argc, char **argv)
 	/* set defaults */
 	(void)snprintf(port_string, sizeof(port_string), "%i", DEFAULT_PORT);
 	snprintf(hostname, sizeof(hostname), "%s", argv[argc - 1]);
+	memset(local_port_string, '\0', sizeof(local_port_string));
 	/* install signal handlers */
   	if(sigemptyset(&sa_sigset.sa_mask))
   	{
@@ -567,6 +596,10 @@ int main(int argc, char **argv)
 				(void)strncpy(port_string, optarg, sizeof(port_string));
 				break;
 
+			case 'b':
+				(void)strncpy(local_port_string, optarg, sizeof(local_port_string));
+				break;
+
 			case 'h':
 				usage();
 				return EXIT_SUCCESS;
@@ -599,7 +632,12 @@ int main(int argc, char **argv)
 	else
 	{
 		operating_mode = OPERATING_MODE_CLIENT;
-		retval = client_mode(hostname, port_string);
+		const char* _local_port_string = NULL;
+		if (strnlen(local_port_string, sizeof(local_port_string)) > 0)
+		{
+			_local_port_string = local_port_string;
+		}
+		retval = client_mode(hostname, port_string, _local_port_string);
 	}
 	/* library clean up */
 	if(udt_cleanup())
