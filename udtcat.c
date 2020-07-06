@@ -124,6 +124,7 @@ void usage(void)
 	printf("usage: udtcat [OPTIONS..] [HOSTNAME]\n"
 		   "-l listen for connections\n"
 		   "-p port number to listen on or connect to.\n"
+		   "-b port number to bind on while connect to a server.\n"
 		   "-s print total sent and received bytes before exit.\n"
 		   "-h display usage.\n"
 		   "-v print udtcat version.\n");
